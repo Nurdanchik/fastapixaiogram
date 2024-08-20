@@ -20,6 +20,7 @@ class Face(Base):
     name: Mapped[str] = mapped_column(String(100))
     landmarks: Mapped[bytes] = mapped_column(LargeBinary)
     picture: Mapped[str] = mapped_column(String(255))
+    code: Mapped[int] = mapped_column(ForeignKey('codes.code'))
 
 
 class Code(Base):

@@ -77,12 +77,14 @@ async def scan_photo(photo_path: Path) -> str:
 async def download_photo(message: Message, bot: Bot):
     destination = MEDIA_FOLDER / f"{message.photo[-1].file_id}.jpg"
 
+    # Скачиваем фото
     await bot.download(
         message.photo[-1],
         destination=destination
     )
 
     try:
+        # Проверяем, что файл является изображением
         img = Image.open(destination)
         img.verify()
     except (IOError, SyntaxError) as e:
@@ -90,11 +92,13 @@ async def download_photo(message: Message, bot: Bot):
         return
 
     try:
+        # Сканируем фото для извлечения кода
         scanned_code = await scan_photo(destination)
         print(f"Scanned code: '{scanned_code}'")  # Логируем сканированный код
 
         async with async_session() as session:
             try:
+                # Ищем код в базе данных
                 code_query = select(Code).filter_by(code=scanned_code)
                 code = (await session.execute(code_query)).scalars().first()
 
@@ -103,11 +107,23 @@ async def download_photo(message: Message, bot: Bot):
                     await message.reply("Code not found in the database.")
                     return
 
+                # Проверяем, активирован ли код
+                if code.activated:
+                    await message.answer(text="Code is already activated!")
+                    return
+
+                # Активируем код и сохраняем путь к изображению
                 code.activated = True
                 code.picture = str(destination)
+
+                # Сохраняем лицо в базу данных
+                face_registered, face_message = await save_face_to_db(message.from_user.last_name, destination, scanned_code)
+
                 await session.commit()
-                await message.reply("Code found and activated! Picture saved.")
+                await message.reply(f"Code found and activated! Picture saved. {face_message}")
             except NoResultFound:
                 await message.reply("Code not found in the database.")
+            except Exception as e:
+                await message.reply(f"An error occurred: {e}")
     finally:
         pass
